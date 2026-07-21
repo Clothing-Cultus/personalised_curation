@@ -1,0 +1,22 @@
+# --- API ---
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.6
+pydantic-settings>=2.2
+
+# --- data / math ---
+numpy>=1.26
+pandas>=2.2
+pyarrow>=15            # parquet artifacts
+scikit-learn>=1.4      # KMeans clusters
+
+# --- DB (reads always; writes only once ENABLE_DB_WRITES=True) ---
+supabase>=2.4
+
+# --- pipeline: embeddings & images (production backend) ---
+# On a machine without torch, set EMBEDDING_BACKEND = "hash_fallback" in
+# core/config.py and these three are not needed.
+open-clip-torch>=2.24
+torch>=2.2
+Pillow>=10.2
+requests>=2.31

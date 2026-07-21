@@ -1,0 +1,4 @@
+,No Fade,Light Fade,Heavy Fade
+No Fade,1,0.7,0.3
+Light Fade,0.7,1,0.5
+Heavy Fade,0.3,0.5,0.99999994
