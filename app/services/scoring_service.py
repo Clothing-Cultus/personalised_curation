@@ -56,12 +56,38 @@ logger = logging.getLogger(__name__)
 # --------------------------------------------------------------------------- #
 #  FILTER (spec §4.6 step 1)
 # --------------------------------------------------------------------------- #
+# Canonicalize any gender token to male | female | unisex | "" (unknown).
+# Robust to the many spellings a DB might hold (male/men/M, female/women/W, …),
+# so the hard filter can't be defeated by a token mismatch.
+_GENDER_CANON = {
+    "male": "male", "men": "male", "mens": "male", "man": "male", "m": "male",
+    "boy": "male", "boys": "male",
+    "female": "female", "women": "female", "womens": "female", "woman": "female",
+    "f": "female", "w": "female", "girl": "female", "girls": "female", "ladies": "female",
+    "unisex": "unisex", "uni": "unisex", "all": "unisex", "both": "unisex",
+}
+
+
+def _canon_gender(g) -> str:
+    return _GENDER_CANON.get(str(g or "").strip().lower(), "")
+
+
 def _gender_ok(meta_gender: np.ndarray, user_gender: str | None) -> np.ndarray:
-    """spec §4.6 (Q16): unknown gender → unisex only; stated → that gender + unisex."""
-    if user_gender in ("male", "female"):
-        want = "men" if user_gender == "male" else "women"
-        return (meta_gender == want) | (meta_gender == "unisex") | (meta_gender == "")
-    return (meta_gender == "unisex") | (meta_gender == "")
+    """HARD gender filter (spec §4.6, Q16):
+      - male user   → products in {male, unisex}      — NEVER female
+      - female user → products in {female, unisex}    — NEVER male
+      - unknown / prefer_not_to_say / not set → unisex ONLY
+    A product with an unrecognized/NULL gender is treated as unisex (visible to
+    all) — it is never 'female', so it can never leak female items to a male user
+    (and vice-versa). Untagged products should still be tagged (see TODO)."""
+    canon_user = _canon_gender(user_gender)
+    prod = np.array([_canon_gender(g) for g in meta_gender])
+    prod[prod == ""] = "unisex"
+    if canon_user == "male":
+        return (prod == "male") | (prod == "unisex")
+    if canon_user == "female":
+        return (prod == "female") | (prod == "unisex")
+    return prod == "unisex"
 
 
 def _size_ok(meta: pd.DataFrame, size_prefs: dict) -> np.ndarray:
@@ -105,7 +131,8 @@ def _recent(history: list[dict], swipe: str, days: float) -> set[str]:
     return out
 
 
-def candidate_mask(bundle, user_gender, size_prefs, served_ids, history) -> np.ndarray:
+def candidate_mask(bundle, user_gender, size_prefs, served_ids, history,
+                   extra_exclude=None) -> np.ndarray:
     meta = bundle.meta
     n = len(meta)
     mask = np.ones(n, dtype=bool)
@@ -119,6 +146,8 @@ def candidate_mask(bundle, user_gender, size_prefs, served_ids, history) -> np.n
         mask &= _size_ok(meta, size_prefs)
 
     excluded = set(served_ids)
+    if extra_exclude:
+        excluded |= set(extra_exclude)
     excluded |= _recent(history, "left", LEFT_SWIPE_COOLDOWN_DAYS)
     # right-swiped stays out for a full freshness cycle (spec §4.6): reuse the
     # recency window as the cycle length here.
@@ -267,13 +296,53 @@ def pick_explore(bundle, taste, cand_idx, scores, n, exclude_rows, rng=None) -> 
     return picked
 
 
+def recycle_cards(bundle, taste, *, user_gender, size_prefs, owed_ids, swiped_ids, n) -> list[dict]:
+    """Re-offer cards the user was served but never swiped (spec: don't waste
+    cards sent to a buffer they never reached). Validates each against the CURRENT
+    filters (active/stock/gender/size + still in the matrix), drops any later
+    swiped, scores them, and returns up to n best-first. Used only at session
+    start (fresh client load); active-session refills don't recycle."""
+    if n <= 0 or not owed_ids:
+        return []
+    meta = bundle.meta
+    rows: list[int] = []
+    for pid in owed_ids:
+        if pid in swiped_ids:
+            continue
+        r = bundle.id_to_row.get(pid)
+        if r is None:
+            continue
+        m = meta.iloc[r]
+        if REQUIRE_ACTIVE_STATUS and m["status"] != "active":
+            continue
+        if REQUIRE_STOCK and not (m["items_available"] > 0):
+            continue
+        if GENDER_SCOPE and not _gender_ok(np.array([m["gender"]]), user_gender)[0]:
+            continue
+        if SIZE_MATCHING and not _size_ok(meta.iloc[[r]].reset_index(drop=True), size_prefs)[0]:
+            continue
+        rows.append(int(r))
+    if not rows:
+        return []
+    idx = np.array(rows)
+    scores = score_candidates(bundle, taste, idx, {}, [], [])
+    order = np.argsort(scores)[::-1][:n]
+    chosen, chosen_scores = idx[order], scores[order]
+    pcts = percent_match(chosen_scores)
+    return [{"product_id": meta.iloc[int(r)]["id"], "percent_match": int(p),
+             "is_explore": False, "score": float(s)}
+            for r, p, s in zip(chosen, pcts, chosen_scores)]
+
+
 # --------------------------------------------------------------------------- #
 #  Orchestration
 # --------------------------------------------------------------------------- #
 def assemble_batch(bundle, taste, *, user_gender, size_prefs, served_ids, history,
-                   brand_counts, n_cards, seed) -> list[dict]:
-    """Return up to n_cards card dicts: {product_id, percent_match, is_explore, score}."""
-    mask = candidate_mask(bundle, user_gender, size_prefs, served_ids, history)
+                   brand_counts, n_cards, seed, extra_exclude=None) -> list[dict]:
+    """Return up to n_cards card dicts: {product_id, percent_match, is_explore, score}.
+    extra_exclude: product_ids to keep out of the fresh pool (e.g. recycled cards
+    already placed at the front of the deck)."""
+    mask = candidate_mask(bundle, user_gender, size_prefs, served_ids, history, extra_exclude)
     cand_idx = np.flatnonzero(mask)
     if len(cand_idx) == 0:
         return []

@@ -8,8 +8,9 @@ FastAPI returns `product_id` + PC fields only; the calling **server** hydrates
 full product data from Supabase and renders cards. The browser never calls this
 API directly (spec §1, §6.1).
 
-**Frontend / API consumers:** see [`docs/API.md`](docs/API.md) for the endpoint
-contract (requests, responses, client rules). Open items are tracked in
+**Docs:** [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (system overview + general
+FAQ), [`docs/API.md`](docs/API.md) (endpoint contract for frontend),
+[`docs/LOCAL_SETUP.md`](docs/LOCAL_SETUP.md) (local Supabase setup). Open items:
 [`TODO.md`](TODO.md).
 
 ## Layout (spec §2)

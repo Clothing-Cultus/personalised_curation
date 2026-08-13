@@ -98,3 +98,18 @@ alter table pc_sessions       enable row level security;
 alter table pc_session_items  enable row level security;
 alter table pc_purchase_weights enable row level security;
 alter table pc_job_runs       enable row level security;
+
+-- Grants: RLS bypass is NOT enough — PostgREST still checks table privileges,
+-- so without these every request 403s with "permission denied for table ...".
+-- Current Supabase no longer auto-exposes new public tables to the API roles
+-- (the legacy auto-expose is deprecated), so the grant must be explicit.
+-- service_role ONLY: this is a server-side service; anon/authenticated are
+-- deliberately given nothing, and RLS above is the second line of defence.
+grant select, insert, update, delete on user_taste          to service_role;
+grant select, insert, update, delete on pc_sessions         to service_role;
+grant select, insert, update, delete on pc_session_items    to service_role;
+grant select, insert, update, delete on pc_purchase_weights to service_role;
+grant select, insert, update, delete on pc_job_runs         to service_role;
+
+-- bigserial/identity columns need their sequence usable by the writing role.
+grant usage, select on all sequences in schema public to service_role;

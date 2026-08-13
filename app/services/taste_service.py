@@ -48,6 +48,25 @@ def apply_interactions(
     return v
 
 
+def rebuild_vector(matrix: np.ndarray, id_to_row: dict, history: list[dict]) -> np.ndarray:
+    """Rebuild a user's vector from scratch by replaying their ordered swipe
+    history against a (possibly new) product matrix — the REPLAY path of
+    apply_interactions (spec §3.3 / PC-todo-later §5). Used by the offline
+    vector-rebuild job after a pipeline change so users don't stay cold-started.
+
+    `history`: ordered list of interaction dicts ({product_id, swipe,
+    details_read, last_image_discovered}). Products not in the current matrix
+    are skipped.
+    """
+    dim = matrix.shape[1]
+    pairs: list[tuple[np.ndarray, float]] = []
+    for it in history:
+        row = id_to_row.get(it["product_id"])
+        if row is not None:
+            pairs.append((matrix[row], event_weight(it)))
+    return apply_interactions(np.zeros(dim, dtype=np.float32), pairs)
+
+
 def event_weight(interaction: dict) -> float:
     """Map a ProductInteraction to its vector weight (spec §4.5, glossary)."""
     swipe = interaction["swipe"]

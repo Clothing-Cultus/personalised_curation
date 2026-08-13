@@ -104,7 +104,7 @@ CORS_ALLOWED_ORIGINS = ["http://localhost:3000", "https://cultus.in"]
 # spool to data/spool/*.jsonl and the in-memory stores are the source of truth.
 # Flip to True ONLY after running migrations/001_pc_tables.sql by hand (Hard
 # Rule #2: no migration is ever executed by code).
-ENABLE_DB_WRITES = False
+ENABLE_DB_WRITES = True
 
 # Artifact hot-reload: the app polls manifest.json this often and swaps the
 # in-memory matrix atomically when a new pipeline version appears.
@@ -229,6 +229,20 @@ IMAGE_DOWNLOAD_WORKERS = 8
 N_CLUSTERS = 12                    # KMeans arms for Thompson-sampling exploration
 ANCHOR_DECK_SIZE = 30              # precomputed degradation / cold-start deck size
 
+# The artifact files the pipeline writes and the API reads (order-independent).
+ARTIFACT_FILES = [
+    "product_matrix.npy", "product_meta.parquet", "clusters.json",
+    "anchor_deck.json", "vibe_vectors.npz", "manifest.json",
+]
+
+# Remote artifact storage (Supabase Storage, S3-compatible). Used in
+# staging/prod so the nightly pipeline publishes the matrix once and every API
+# instance downloads the same build for its in-memory hot path. The upload
+# (pipeline) and download (API) CALL SITES are commented out for now — enable
+# them for staging/prod (see TODO). Create the `pc` bucket manually first.
+ARTIFACT_BUCKET = "pc"
+ARTIFACT_REMOTE_FOLDER = "artifacts"
+
 
 # ===========================================================================
 #  Categorical embeddings via MDS (spec §4.3) — per-feature, not style-only
@@ -329,8 +343,11 @@ REQUIRE_STOCK = True
 GENDER_SCOPE = True            # unknown gender → unisex only; stated → that gender + unisex
 SIZE_MATCHING = True           # only serve products available in the user's category size
 # Seconds between lightweight Supabase reads refreshing ONLY stock/status/price
-# of the in-memory mirror (0 disables; used only when ENABLE_DB_WRITES or creds set).
-STOCK_REFRESH_SECONDS = 300
+# of the in-memory mirror (0 disables; used only when creds set). Runs on a
+# background daemon thread (one small paged read of ~1k rows), never in the
+# request path — lowering it does not slow serving. 60s ⇒ sold-out items drop
+# out within a minute.
+STOCK_REFRESH_SECONDS = 60
 
 
 # ===========================================================================

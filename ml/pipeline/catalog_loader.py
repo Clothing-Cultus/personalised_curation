@@ -56,14 +56,13 @@ def _fetch_all(table: str, columns: str = "*", page_size: int = 1000) -> list[di
 def _load_raw() -> dict[str, list[dict]]:
     if _use_supabase():
         logger.info("Loading catalog from Supabase (read-only)")
+        # topwear/bottomwear use "*" so a schema missing the newer columns
+        # (hooded / fade / closure_type, spec §3.1) doesn't error the select —
+        # load_catalog reads every field defensively with .get() and defaults.
         return {
             "products": _fetch_all("products", PRODUCT_COLUMNS),
-            "topwear": _fetch_all(
-                "topwear", "product_id, fitting_type, neck_type, sleeves, length, hooded"
-            ),
-            "bottomwear": _fetch_all(
-                "bottomwear", "product_id, fitting_type, waist_type, length, fade, closure_type"
-            ),
+            "topwear": _fetch_all("topwear", "*"),
+            "bottomwear": _fetch_all("bottomwear", "*"),
             "categories": _fetch_all("categories", "id, title"),
         }
     logger.info("No Supabase credentials — loading local catalog from %s", LOCAL_CATALOG_PATH)

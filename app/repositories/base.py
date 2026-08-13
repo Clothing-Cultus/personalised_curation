@@ -41,7 +41,10 @@ class Gateway:
         self.db_enabled = bool(ENABLE_DB_WRITES)
         SPOOL_DIR.mkdir(parents=True, exist_ok=True)
         self._spool_lock = threading.Lock()
-        self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="persist")
+        # ONE worker: DB writes run in submission order, so FK-dependent inserts
+        # land in order (pc_sessions before its pc_session_items, etc.). Writes
+        # are ms-fast and off the request path, so a single worker keeps up.
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="persist")
         if self.db_enabled:
             logger.warning("DB writes ENABLED — pc_* / user_taste tables will be written")
         else:

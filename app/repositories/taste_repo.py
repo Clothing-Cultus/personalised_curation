@@ -75,6 +75,15 @@ class TasteRepo:
         while len(self._cache) > self._max:
             self._cache.popitem(last=False)
 
+    def list_stale_user_ids(self, current_version: str) -> list[str]:
+        """User ids whose stored vector_version != the current artifact version —
+        the set the offline rebuild job must replay (spec §3.3)."""
+        if gateway.db_enabled:
+            rows = (supabase().table("user_taste").select("user_id")
+                    .neq("vector_version", current_version).execute().data)
+            return [r["user_id"] for r in rows]
+        return [uid for uid, st in self._cache.items() if st.vector_version != current_version]
+
     def save(self, st: TasteState) -> None:
         st.last_decayed_at = st.last_decayed_at or _now()
         self._put(st)

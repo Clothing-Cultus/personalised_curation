@@ -72,6 +72,14 @@ def run() -> None:
     )
     logger.info("Pipeline complete — artifact version %s (dim=%d)", version, matrix.shape[1])
 
+    # --- STAGING/PROD ONLY (dormant) -------------------------------------
+    # Publish the new artifacts to Supabase Storage (bucket `pc`) so every API
+    # instance downloads the same build. Uncomment for staging/prod (TODO.md);
+    # local dev reads artifacts straight from ml/artifacts/.
+    # from ml.pipeline.publish_artifacts import upload_artifacts_to_supabase
+    # upload_artifacts_to_supabase()
+    # ---------------------------------------------------------------------
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Nightly feature pipeline")

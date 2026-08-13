@@ -56,6 +56,25 @@ def _atomic_write_json(path, obj) -> None:
     _atomic_write_bytes(path, json.dumps(obj, indent=2, default=str).encode("utf-8"))
 
 
+def _layout_signature(matrix, block_layout) -> str:
+    """A short hash of the FEATURE LAYOUT (block names + dims + total dim).
+
+    This governs user-vector COMPATIBILITY, separate from `version` (a per-run
+    timestamp used only for hot-reload detection). It changes only when features
+    are added/removed or a block's size changes — NOT when products or values
+    change. So a product-only nightly run keeps the same signature, existing
+    user vectors stay valid, and no rebuild / cold-start is triggered.
+    """
+    import hashlib
+
+    payload = json.dumps(
+        {"dim": int(matrix.shape[1]),
+         "blocks": [[b["name"], int(b["dims"])] for b in block_layout]},
+        sort_keys=True,
+    )
+    return hashlib.sha256(payload.encode()).hexdigest()[:12]
+
+
 def write_artifacts(matrix, meta, clusters, anchor_deck, vibe_vectors, block_layout) -> str:
     out = ARTIFACTS_DIR
     out.mkdir(parents=True, exist_ok=True)
@@ -78,7 +97,8 @@ def write_artifacts(matrix, meta, clusters, anchor_deck, vibe_vectors, block_lay
 
     # Manifest LAST — the app reloads everything when `version` changes.
     _atomic_write_json(out / "manifest.json", {
-        "version": version,
+        "version": version,                              # per-run id (hot-reload)
+        "layout_signature": _layout_signature(matrix, block_layout),  # vector compat
         "created_at": datetime.now(timezone.utc).isoformat(),
         "n_products": int(matrix.shape[0]),
         "vector_dim": int(matrix.shape[1]),

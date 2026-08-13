@@ -9,16 +9,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from fastapi.testclient import TestClient  # noqa: E402
 
+from core.config import ENV  # noqa: E402
 from app.main import app  # noqa: E402
 
 
 def main() -> None:
     with TestClient(app) as client:
+        # send the shared-secret header on every call (if auth is enabled in .env)
+        if ENV.internal_key:
+            client.headers.update({"X-Internal-Key": ENV.internal_key})
         h = client.get("/healthz").json()
         print("healthz:", h)
         assert h["status"] == "ok", "artifacts not loaded"
 
-        r = client.post("/api/start_session/user-smoke-1")
+        r = client.post("/api/start_session/00000000-0000-0000-0000-0000000000cc")
         assert r.status_code == 200, r.text
         data = r.json()
         sid = data["session_id"]
@@ -37,7 +41,7 @@ def main() -> None:
                 break
             card = queue.pop(0)
             swipe = "right" if step % 2 == 0 else "left"
-            body = {"session_id": sid, "interactions": [{
+            body = {"session_id": sid, "ProductInteraction": [{
                 "product_id": card["product_id"], "swipe": swipe,
                 "details_read": False, "last_image_discovered": 1,
                 "bought_in_session": False}], "products_swiped": 1}

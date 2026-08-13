@@ -24,7 +24,15 @@ class PurchaseWeightsRepo:
         }
         gateway.spool("pc_purchase_weights", record)
         if not gateway.db_enabled:
+            logger.info("Purchase weight (spool only, DB off): user=%s product=%s weight=%s gift=%s",
+                        user_id, product_id, weight, gift_status)
             return False
         res = (supabase().table("pc_purchase_weights")
                .upsert(record, on_conflict="order_item_id", ignore_duplicates=True).execute())
-        return bool(res.data)
+        newly = bool(res.data)
+        if newly:
+            logger.info("Applied purchase weight +%s to user=%s for product=%s (gift=%s, order_item=%s)",
+                        weight, user_id, product_id, gift_status, order_item_id)
+        else:
+            logger.info("Purchase already credited, skipped: order_item=%s user=%s", order_item_id, user_id)
+        return newly

@@ -24,7 +24,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ArtifactBundle:
-    version: str
+    version: str                 # per-run timestamp — hot-reload detection
+    layout_signature: str        # feature-layout hash — user-vector compatibility
     matrix: np.ndarray
     meta: pd.DataFrame
     id_to_row: dict[str, int]
@@ -44,19 +45,46 @@ def _load_bundle() -> ArtifactBundle:
     with np.load(out / "vibe_vectors.npz") as npz:
         vibe_vectors = {k: npz[k] for k in npz.files}
     return ArtifactBundle(
-        version=manifest["version"], matrix=matrix, meta=meta,
+        version=manifest["version"],
+        layout_signature=manifest.get("layout_signature", manifest["version"]),
+        matrix=matrix, meta=meta,
         id_to_row={pid: i for i, pid in enumerate(meta["id"])},
         clusters=clusters, anchor_deck=anchor_deck,
         vibe_vectors=vibe_vectors, manifest=manifest,
     )
 
 
-def _current_version() -> str | None:
+def _download_artifacts_from_supabase() -> None:
+    """STAGING/PROD ONLY (dormant): pull the latest artifacts from Supabase
+    Storage (bucket `pc`, folder `artifacts/`) into the local ml/artifacts/ dir
+    before loading, so every EC2 instance uses the same nightly build for its
+    in-memory hot path. The matching upload is ml/pipeline/publish_artifacts.py.
+    Call site below is commented out; enable for staging/prod (see TODO.md)."""
+    from supabase import create_client
+
+    from core.config import (
+        ARTIFACT_BUCKET,
+        ARTIFACT_FILES,
+        ARTIFACT_REMOTE_FOLDER,
+        ENV,
+    )
+
+    sb = create_client(ENV.supabase_url, ENV.supabase_service_key)
+    store = sb.storage.from_(ARTIFACT_BUCKET)
+    ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+    for fname in ARTIFACT_FILES:
+        data = store.download(f"{ARTIFACT_REMOTE_FOLDER}/{fname}")
+        (ARTIFACTS_DIR / fname).write_bytes(data)
+    logger.info("Downloaded %d artifacts from %s/%s", len(ARTIFACT_FILES),
+                ARTIFACT_BUCKET, ARTIFACT_REMOTE_FOLDER)
+
+
+def _current_manifest() -> dict | None:
     path = ARTIFACTS_DIR / "manifest.json"
     if not path.exists():
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8")).get("version")
+        return json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return None
 
@@ -68,6 +96,7 @@ class ArtifactStore:
         self._loaded_at: float | None = None
         self._stop = threading.Event()
         self._product_repo = None   # injected; used only for stock refresh
+        self._warned_layout_version = None   # de-dupe the "layout changed" warning
 
     def set_product_repo(self, repo) -> None:
         self._product_repo = repo
@@ -97,6 +126,12 @@ class ArtifactStore:
                     bundle.version, bundle.matrix.shape[0], bundle.matrix.shape[1])
 
     def try_load(self) -> None:
+        # --- STAGING/PROD ONLY (dormant) ---------------------------------
+        # Pull the latest nightly artifacts from Supabase Storage before loading
+        # so every API instance serves the same build. Uncomment for
+        # staging/prod (TODO.md); local dev reads ml/artifacts/ directly.
+        # _download_artifacts_from_supabase()
+        # -----------------------------------------------------------------
         try:
             self.load()
         except FileNotFoundError:
@@ -113,12 +148,33 @@ class ArtifactStore:
         self._stop.set()
 
     def _reload_loop(self) -> None:
+        """Hot-reload, but LAYOUT-AWARE. Auto-swaps only builds with the SAME
+        feature layout (new/updated products). A build that changes the feature
+        layout is NOT auto-adopted — that would cold-start everyone whose vector
+        is still on the old layout. Such a build waits for a deliberate restart
+        (do it after the nightly vector-rebuild, so the app comes up with the new
+        matrix AND already-rebuilt vectors — no cold-start window)."""
         while not self._stop.wait(ARTIFACT_RELOAD_CHECK_SECONDS):
             try:
-                version = _current_version()
-                if version and (not self._bundle or version != self._bundle.version):
-                    logger.info("New artifact version %s — reloading", version)
-                    self.load()
+                m = _current_manifest()
+                if not m:
+                    continue
+                version = m.get("version")
+                if not version or (self._bundle and version == self._bundle.version):
+                    continue
+                new_sig = m.get("layout_signature", version)
+                if self._bundle and new_sig != self._bundle.layout_signature:
+                    if self._warned_layout_version != version:
+                        logger.warning(
+                            "New build %s changes the feature layout (%s -> %s) — "
+                            "NOT hot-reloading. Restart the API after the vector "
+                            "rebuild to adopt it.",
+                            version, self._bundle.layout_signature, new_sig,
+                        )
+                        self._warned_layout_version = version
+                    continue
+                logger.info("New artifact version %s (same layout) — reloading", version)
+                self.load()
             except Exception:  # noqa: BLE001
                 logger.exception("Artifact reload failed; keeping current bundle")
 
