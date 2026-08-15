@@ -4,6 +4,8 @@ unit-testable without a database). Controllers import the singletons from here.
 """
 from __future__ import annotations
 
+from app.repositories.order_repo import OrderRepo
+from app.repositories.purchase_weights_repo import PurchaseWeightsRepo
 from app.repositories.session_events_repo import SessionEventsRepo
 from app.repositories.session_items_repo import SessionItemsRepo
 from app.repositories.session_repo import SessionRepo
@@ -20,6 +22,8 @@ taste_repo = TasteRepo()
 user_repo = UserRepo()
 product_repo = ProductRepo()
 events_repo = SessionEventsRepo()
+order_repo = OrderRepo()
+purchase_weights_repo = PurchaseWeightsRepo()
 
 # Wire the stock-refresh source into the artifact store.
 artifact_store.set_product_repo(product_repo)

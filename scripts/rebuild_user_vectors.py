@@ -47,9 +47,16 @@ def run() -> int:
     rebuilt = 0
     for user_id in stale:
         history = deps.items_repo.history_for_user(user_id)
-        if not history:
+        purchases = deps.purchase_weights_repo.purchases_for_user(user_id)
+        if not history and not purchases:
             continue
         vector = taste_service.rebuild_vector(bundle.matrix, bundle.id_to_row, history)
+        # re-apply already-credited purchases (from the ledger) so purchase signal
+        # survives the matrix rebuild — same reusable apply_interactions function.
+        pairs = [(bundle.matrix[bundle.id_to_row[p["product_id"]]], float(p["weight_applied"]))
+                 for p in purchases if p["product_id"] in bundle.id_to_row]
+        if pairs:
+            vector = taste_service.apply_interactions(vector, pairs)
         st = deps.taste_repo.get(user_id)
         if st is None:
             from app.repositories.taste_repo import TasteState

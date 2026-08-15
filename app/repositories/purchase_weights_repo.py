@@ -14,6 +14,17 @@ logger = logging.getLogger(__name__)
 
 
 class PurchaseWeightsRepo:
+    def purchases_for_user(self, user_id: str) -> list[dict]:
+        """Already-credited purchases for a user (from the ledger) as
+        [{product_id, weight_applied}] — replayed by the vector-rebuild job so a
+        layout change doesn't lose purchase signal (rebuild replays swipes + these)."""
+        if not gateway.db_enabled:
+            return []
+        rows = (supabase().table("pc_purchase_weights")
+                .select("product_id,weight_applied")
+                .eq("user_id", user_id).execute().data)
+        return rows
+
     def claim(self, order_item_id: str, user_id: str, product_id: str,
               weight: float, gift_status: str) -> bool:  # pragma: no cover - nightly
         """Return True if this order_item was newly claimed (should be applied),

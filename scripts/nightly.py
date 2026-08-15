@@ -31,11 +31,15 @@ def main() -> None:
     from ml.pipeline import run_pipeline
     from scripts import rebuild_user_vectors
 
-    logger.info("Nightly step 1/2: pipeline")
+    logger.info("Nightly step 1/3: pipeline")
     run_pipeline.run()
 
-    logger.info("Nightly step 2/2: rebuild user vectors")
+    logger.info("Nightly step 2/3: rebuild user vectors (replays swipes + ledger purchases)")
     rebuild_user_vectors.run()
+
+    logger.info("Nightly step 3/3: purchase reconciliation")
+    from scripts import purchase_reconciliation
+    purchase_reconciliation.run()
 
     logger.info("Nightly job complete")
 

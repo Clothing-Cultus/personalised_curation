@@ -1,0 +1,5 @@
+# Shell scripts must stay LF so they run inside the Linux Docker container
+# (a CRLF shebang breaks with "bad interpreter"). Force it regardless of the
+# committer's OS / core.autocrlf setting.
+*.sh text eol=lf
+docker-entrypoint.sh text eol=lf

@@ -104,7 +104,9 @@ CORS_ALLOWED_ORIGINS = ["http://localhost:3000", "https://cultus.in"]
 # spool to data/spool/*.jsonl and the in-memory stores are the source of truth.
 # Flip to True ONLY after running migrations/001_pc_tables.sql by hand (Hard
 # Rule #2: no migration is ever executed by code).
-ENABLE_DB_WRITES = True
+# Default True (this machine's local dev); overridable via PC_ENABLE_DB_WRITES so
+# the shared Docker image can run DB-off (in-memory) without editing this file.
+ENABLE_DB_WRITES = os.environ.get("PC_ENABLE_DB_WRITES", "true").strip().lower() in ("1", "true", "yes")
 
 # Artifact hot-reload: the app polls manifest.json this often and swaps the
 # in-memory matrix atomically when a new pipeline version appears.
@@ -149,6 +151,9 @@ PURCHASE_WEIGHTS = {
     "unknown": 3.5,            # gift status not yet known (default until the flag ships)
     "self": 5.0,               # confirmed self-purchase — the strongest signal there is
 }
+# Which orders count as a real purchase for the nightly reconciliation job.
+# (prod today: confirmed / pending / cancelled — only 'confirmed' is a real buy.)
+PURCHASE_CONFIRMED_STATUSES = ["confirmed"]
 
 # Decay: keeps u tracking CURRENT taste rather than averaging all of history.
 WITHIN_SESSION_DECAY = 0.95    # u ← 0.95·u + w·p on every swipe during a session

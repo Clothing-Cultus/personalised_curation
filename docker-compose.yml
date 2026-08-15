@@ -1,0 +1,23 @@
+# `docker compose up --build` → http://localhost:8000/docs
+#
+# Two modes, chosen by the environment below:
+#   • In-memory (default): synthetic products, no DB, no auth — just test the API.
+#   • Your Supabase:       real products + persistence — see the commented block.
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      PC_EMBEDDING_BACKEND: hash_fallback
+
+      # --- Default: in-memory, no database ---
+      PC_ENABLE_DB_WRITES: "false"
+
+      # --- To use YOUR local Supabase instead ---
+      # 1. Run our migrations on it (see migrations/README.md).
+      # 2. Comment out PC_ENABLE_DB_WRITES:"false" above, then set:
+      # PC_ENABLE_DB_WRITES: "true"
+      # SUPABASE_URL: "http://host.docker.internal:54321"   # your Supabase API port (host.docker.internal = your machine)
+      # SUPABASE_SERVICE_KEY: "<your local service_role key>"
+      # INTERNAL_KEY: ""   # set a value and send it as X-Internal-Key to test auth

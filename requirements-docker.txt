@@ -1,0 +1,13 @@
+# Slim deps for the shareable Docker image. NO torch / open-clip — the image
+# uses hash_fallback embeddings, so it stays small and builds fast. Works both
+# in-memory (no DB) and against a real Supabase. (Production uses requirements.txt.)
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.6
+pydantic-settings>=2.2
+numpy>=1.26
+pandas>=2.2
+pyarrow>=15
+scikit-learn>=1.4
+requests>=2.31
+supabase>=2.4

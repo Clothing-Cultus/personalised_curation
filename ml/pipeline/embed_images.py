@@ -79,7 +79,12 @@ def compute_blended_embeddings(df: pd.DataFrame) -> np.ndarray:
 
     if len(misses):
         backend = get_backend()
-        images = download_first_images(misses)
+        # hash_fallback produces deterministic pseudo-vectors that don't use image
+        # content, so skip the downloads — keeps the Docker image's pipeline fast
+        # and fully offline. Real CLIP still downloads.
+        from core.config import EMBEDDING_BACKEND
+
+        images = {} if EMBEDDING_BACKEND == "hash_fallback" else download_first_images(misses)
         for idx, row in misses.iterrows():
             img_bytes = images.get(row["id"])
             img_vec = backend.embed_image(img_bytes) if img_bytes else None

@@ -97,17 +97,28 @@ class SessionItemsRepo:
         return list(self._user_history.get(user_id, []))
 
     def owed_product_ids(self, user_id: str) -> list[str]:
-        """Products served to this user but NEVER swiped (across sessions), most
-        recent first — the cards to re-offer when the user returns (spec: don't
-        waste cards that were sent to a buffer the user never reached). Loose by
-        design: recycle_cards re-validates (stock/gender/size) and drops any the
-        user later swiped elsewhere."""
+        """Un-swiped cards to re-offer when the user returns — ONLY from the
+        user's MOST RECENT session (the session holding their latest served card).
+        This bounds the lookup to one session and stops cards from long-ago
+        sessions haunting forever. It handles both cases automatically:
+          - resume: the most-recent session IS the one being resumed;
+          - renewal: the brand-new session has no items yet, so the most-recent
+            session-with-items is the previous one.
+        Loose by design: recycle_cards re-validates stock/gender/size and drops
+        any the user later swiped elsewhere."""
         if gateway.db_enabled:
+            # the session of the user's most recently served item = their last session
+            recent = (supabase().table("pc_session_items")
+                      .select("session_id,served_at,pc_sessions!inner(user_id)")
+                      .eq("pc_sessions.user_id", user_id)
+                      .order("served_at", desc=True).limit(1).execute().data)
+            if not recent:
+                return []
+            last_session = recent[0]["session_id"]
             rows = (supabase().table("pc_session_items")
-                    .select("product_id,served_at,pc_sessions!inner(user_id)")
-                    .eq("pc_sessions.user_id", user_id)
-                    .is_("swipe", "null")
-                    .order("served_at", desc=True).limit(200).execute().data)
+                    .select("product_id,served_at")
+                    .eq("session_id", last_session).is_("swipe", "null")
+                    .order("served_at", desc=True).execute().data)
             seen: set = set()
             out: list[str] = []
             for r in rows:
@@ -116,15 +127,22 @@ class SessionItemsRepo:
                     seen.add(p)
                     out.append(p)
             return out
-        swiped = {h["product_id"] for h in self._user_history.get(user_id, [])}
-        seen, out = set(), []
+        # in-memory: find the user's session with the latest served_at, take its unswiped
+        best_sid, best_ts = None, ""
         for sid, its in self._by_session.items():
             if self._session_user.get(sid) != user_id:
                 continue
-            for pid, row in its.items():
-                if row.get("swipe") is None and pid not in swiped and pid not in seen:
-                    seen.add(pid)
-                    out.append(pid)
+            for row in its.values():
+                ts = row.get("served_at") or ""
+                if ts > best_ts:
+                    best_ts, best_sid = ts, sid
+        if best_sid is None:
+            return []
+        swiped = {h["product_id"] for h in self._user_history.get(user_id, [])}
+        out = []
+        for pid, row in self._by_session[best_sid].items():
+            if row.get("swipe") is None and pid not in swiped:
+                out.append(pid)
         return out
 
     def history_for_user(self, user_id: str) -> list[dict]:

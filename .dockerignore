@@ -1,0 +1,20 @@
+# Never bake secrets or local state into the shared image
+.env
+.env.local
+pcenv/
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# Rebuilt inside the container at startup (do NOT copy local copies)
+ml/artifacts/
+ml/cache/
+data/
+
+# Local-only / not needed in the image
+.git/
+supabase/.temp/
+supabase/.branches/
+prod_schema.sql
+notebooks/
