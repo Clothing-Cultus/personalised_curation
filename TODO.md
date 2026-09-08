@@ -129,6 +129,31 @@ and staging both work.
   API instances → upload artifacts to S3 (or Supabase Storage) and have each
   instance download on reload. Keep an S3 backup regardless.
 
+## Infra hardening — EC2 SSH access (after the API is live)
+
+The `pc-api` box currently allows SSH (port 22) from `0.0.0.0/0`, chosen so a
+dynamic home IP never causes a mid-deploy lockout. Key-only auth (Ubuntu ships
+with password auth off), so the exposure is scan noise, not a break-in path.
+Tighten once the deploy is stable — either option, not both:
+
+- [ ] **Option A — lock 22 to your IP + keep a console escape hatch.** Set the
+  SSH rule source back to `My IP` (`/32`), and add a *second* SSH rule with
+  source **`13.233.177.0/29`** — AWS's EC2 Instance Connect range for
+  `ap-south-1` (from `https://ip-ranges.amazonaws.com/ip-ranges.json`, service
+  `EC2_INSTANCE_CONNECT`). Then the browser terminal (EC2 console → Connect →
+  EC2 Instance Connect) always works even after your ISP rotates your IP, so a
+  stale `/32` is never a lockout. Cost: re-edit the `/32` whenever you want
+  direct SSH from a new network.
+- [ ] **Option B — SSM Session Manager (proper end state).** Attach an IAM role
+  with `AmazonSSMManagedInstanceCore` to the instance; the SSM agent is already
+  preinstalled on the Ubuntu AMI. Shell access then goes through the AWS API and
+  **port 22 can be closed entirely** (remove the inbound rule). No keys to
+  distribute or rotate, and every session is auditable in CloudTrail. More setup
+  (IAM), which is why it was deferred past the first deploy.
+
+Ports 80/443 stay open to `0.0.0.0/0` regardless — 80 is required permanently for
+certbot ACME renewal (see `docs/EC2_DEPLOY.md` §9).
+
 ## Future / roadmap (later phases)
 
 - [ ] **Context-aware curation.** Adjust scoring by real-world context — weather,
@@ -162,6 +187,13 @@ and staging both work.
   weight tier. Until they exist, every matched purchase uses the default +3.5
   (unknown) tier and PC-attribution is heuristic. (Ayush adds the columns; the
   nightly job then reads them — see PC-todo-later §1/§6.)
+
+- [ ] **Outfit pairing within right-swipes.** After a session, pair up the items
+  the user right-swiped/superliked (the tray) into suggested outfits — e.g. match
+  a liked top with liked bottoms (complementary category, style, colour), so the
+  end screen can show "wear these together." Could use the structured vectors
+  (style/colour/category compatibility) over the tray, later a learned pairing
+  model. Needs the tray exposed at session end (see output-data TODO).
 
 - [ ] **Seed / enrich the taste vector from purchase history, add-to-cart, and
   wishlist.** Beyond swipes, use each user's existing signals — past purchases

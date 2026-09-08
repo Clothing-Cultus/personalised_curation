@@ -1,0 +1,22 @@
+# systemd unit for the Personal Curation API (FastAPI/uvicorn).
+# Install: sudo cp deploy/personalised-curation.service /etc/systemd/system/
+#          sudo systemctl daemon-reload && sudo systemctl enable --now personalised-curation
+[Unit]
+Description=Cultus Personal Curation API (FastAPI)
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/personalised_curation
+# .env holds SUPABASE_*, INTERNAL_KEY, PC_ENABLE_DB_WRITES, PC_EMBEDDING_BACKEND.
+# EnvironmentFile puts them in the process env, so BOTH pydantic (SUPABASE_*) and
+# os.environ (PC_*) see them. Keep it as plain KEY=value lines, no quotes/export.
+EnvironmentFile=/home/ubuntu/personalised_curation/.env
+# ONE worker on purpose — the in-memory session/user/matrix caches are per-process
+# (spec §7 / PC-todo-later §4). Do NOT raise --workers without Redis/sticky routing.
+ExecStart=/home/ubuntu/personalised_curation/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

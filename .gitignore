@@ -1,6 +1,25 @@
 # secrets
 .env
 .env.local
+.env.*
+!.env.example
+
+# deploy credentials (EC2 SSH keys, deploy keys) - NEVER commit
+*.pem
+*.key
+*.ppk
+id_rsa*
+id_ed25519*
+*.pub
+
+# credentials reference. The real file lives OUTSIDE every repo at
+#   Cultus/Code/important files/cultus-pc-credentials.md
+# These patterns are a backstop in case a copy is ever dropped in here.
+cultus-pc-credentials.md
+CREDENTIALS.md
+credentials.md
+secrets.*
+*.secrets
 
 # python
 __pycache__/
