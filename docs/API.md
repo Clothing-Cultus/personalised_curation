@@ -143,6 +143,15 @@ isn't enough, because the running container keeps serving from its caches.
 Returns **403** when `PC_ENV=production`. Unknown users return 200 with
 `sessions_deleted: 0`.
 
+```
+POST /api/reset_all                 (X-Internal-Key)
+→ 200 { "sessions_deleted": 42 }
+```
+
+The same wipe for **every** user at once: all sessions, cards, events and taste
+vectors, in the DB and in memory. The purchase ledger is kept. Also **403** when
+`PC_ENV=production`.
+
 ---
 
 ## Response field reference

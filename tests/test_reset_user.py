@@ -90,3 +90,23 @@ def test_reset_requires_internal_key(client, monkeypatch):
 
 def test_reset_rejects_non_uuid(client):
     assert client.post("/api/reset_user/not-a-uuid").status_code == 400
+
+
+def test_reset_all_wipes_everyone(client):
+    sid1 = _seed(U1)
+    _seed(U2)
+    r = client.post("/api/reset_all")
+    assert r.status_code == 200
+    assert r.json()["sessions_deleted"] >= 2
+    for uid in (U1, U2):
+        assert deps.session_repo.find_open(uid) is None
+        assert deps.items_repo.user_swipes(uid) == []
+        assert deps.taste_repo.get(uid) is None
+    assert deps.items_repo.served_product_ids(sid1) == set()
+
+
+def test_reset_all_refused_in_production(client, monkeypatch):
+    monkeypatch.setattr(ENV, "pc_env", "production")
+    _seed(U1)
+    assert client.post("/api/reset_all").status_code == 403
+    assert deps.session_repo.find_open(U1) is not None
