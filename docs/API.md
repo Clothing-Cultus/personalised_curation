@@ -127,6 +127,24 @@ GET /healthz          (no auth)
 
 ---
 
+## 4. Reset a user (staging only)
+
+```
+POST /api/reset_user/{user_id}      (X-Internal-Key)
+→ 200 { "user_id": "…", "sessions_deleted": 3 }
+```
+
+Wipes everything PC holds for the user, in the DB **and** in process memory:
+sessions, served cards, swipe history (so cooldowns and "seen" state go too),
+lifecycle events, and the taste vector. Their next `start_session` is a brand-new,
+cold-start user. The purchase ledger is kept. Deleting the rows from Supabase alone
+isn't enough, because the running container keeps serving from its caches.
+
+Returns **403** when `PC_ENV=production`. Unknown users return 200 with
+`sessions_deleted: 0`.
+
+---
+
 ## Response field reference
 
 **SessionData**
