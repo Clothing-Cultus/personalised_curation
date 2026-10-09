@@ -1,6 +1,13 @@
 """Pydantic request/response models — all payload validation lives here (spec §6.3)."""
 from app.schemas.requests import ProductInteraction, SuggestRequestBody
-from app.schemas.responses import Health, ProductData, ResetUserResult, SessionData, SessionSummary
+from app.schemas.responses import (
+    Health,
+    ProductData,
+    ResetAllResult,
+    ResetUserResult,
+    SessionData,
+    SessionSummary,
+)
 
 __all__ = [
     "ProductInteraction",
@@ -10,4 +17,5 @@ __all__ = [
     "SessionData",
     "Health",
     "ResetUserResult",
+    "ResetAllResult",
 ]

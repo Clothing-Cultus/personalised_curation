@@ -51,3 +51,7 @@ class Health(BaseModel):
 class ResetUserResult(BaseModel):
     user_id: str
     sessions_deleted: int
+
+
+class ResetAllResult(BaseModel):
+    sessions_deleted: int

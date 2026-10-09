@@ -25,9 +25,25 @@ class ResetService:
         self.events = events_repo
         self.taste = taste_repo
 
-    def reset_user(self, user_id: str) -> dict:
+    @staticmethod
+    def _guard() -> None:
         if ENV.pc_env == "production":
             raise Forbidden("User reset is disabled in production")
+
+    def reset_all(self) -> dict:
+        """Every user at once: all sessions, cards, events and taste vectors."""
+        self._guard()
+        gateway.flush()
+        # children before pc_sessions (FK order)
+        self.items.purge_all()
+        self.events.purge_all()
+        sessions_deleted = self.sessions.purge_all()
+        self.taste.purge_all()
+        logger.warning("staging reset_all sessions_deleted=%d", sessions_deleted)
+        return {"sessions_deleted": sessions_deleted}
+
+    def reset_user(self, user_id: str) -> dict:
+        self._guard()
         # let queued writes land first so none re-create rows after the purge
         gateway.flush()
         session_ids = self.sessions.ids_for_user(user_id)
