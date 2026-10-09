@@ -25,3 +25,8 @@ class SessionEventsRepo:
         gateway.spool("pc_session_events_purge_user", {"user_id": user_id})
         if gateway.db_enabled:
             supabase().table("pc_session_events").delete().eq("user_id", user_id).execute()
+
+    def purge_all(self) -> None:
+        gateway.spool("pc_session_events_purge_all", {})
+        if gateway.db_enabled:
+            supabase().table("pc_session_events").delete().not_.is_("id", "null").execute()

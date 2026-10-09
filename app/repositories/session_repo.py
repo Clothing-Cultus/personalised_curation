@@ -107,3 +107,16 @@ class SessionRepo:
         gateway.spool("pc_sessions_purge_user", {"user_id": user_id, "n": len(session_ids)})
         if gateway.db_enabled:
             supabase().table("pc_sessions").delete().eq("user_id", user_id).execute()
+
+    def purge_all(self) -> int:
+        """Delete every session (cache + sync DB). Returns how many. Delete
+        items/events first — they reference these rows."""
+        ids = set(self._by_id)
+        if gateway.db_enabled:
+            rows = supabase().table("pc_sessions").select("id").execute().data or []
+            ids.update(r["id"] for r in rows)
+        self._by_id.clear()
+        gateway.spool("pc_sessions_purge_all", {"n": len(ids)})
+        if gateway.db_enabled:
+            supabase().table("pc_sessions").delete().not_.is_("id", "null").execute()
+        return len(ids)

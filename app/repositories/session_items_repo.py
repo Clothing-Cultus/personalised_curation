@@ -176,3 +176,12 @@ class SessionItemsRepo:
         if gateway.db_enabled:
             for sid in sids:
                 supabase().table("pc_session_items").delete().eq("session_id", sid).execute()
+
+    def purge_all(self) -> None:
+        """Drop every served card + all swipe history (cache + sync DB)."""
+        self._by_session.clear()
+        self._session_user.clear()
+        self._user_history.clear()
+        gateway.spool("pc_session_items_purge_all", {})
+        if gateway.db_enabled:
+            supabase().table("pc_session_items").delete().not_.is_("id", "null").execute()
