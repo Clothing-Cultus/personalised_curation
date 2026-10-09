@@ -69,5 +69,11 @@ class Gateway:
                 logger.exception("Supabase write failed (data remains in spool)")
         self._executor.submit(wrapped)
 
+    def flush(self, timeout: float = 15.0) -> None:
+        """Wait until every queued background write has run, so a still-queued
+        insert can't land after a purge and leave orphan rows."""
+        if self.db_enabled:
+            self._executor.submit(lambda: None).result(timeout=timeout)
+
 
 gateway = Gateway()

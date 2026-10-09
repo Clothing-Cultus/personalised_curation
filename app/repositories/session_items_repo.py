@@ -163,3 +163,16 @@ class SessionItemsRepo:
         # missing → left swipes use the baseline weight)
         return sorted(self._user_history.get(user_id, []),
                       key=lambda h: h.get("swiped_at") or "")
+
+    def purge_user(self, user_id: str, session_ids: list[str]) -> None:
+        """Drop every served card + swipe-history entry for a user (cache + sync
+        DB). Clears left-swipe cooldowns and "seen" state."""
+        sids = set(session_ids) | {sid for sid, uid in self._session_user.items() if uid == user_id}
+        for sid in sids:
+            self._by_session.pop(sid, None)
+            self._session_user.pop(sid, None)
+        self._user_history.pop(user_id, None)
+        gateway.spool("pc_session_items_purge_user", {"user_id": user_id})
+        if gateway.db_enabled:
+            for sid in sids:
+                supabase().table("pc_session_items").delete().eq("session_id", sid).execute()
