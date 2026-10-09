@@ -19,7 +19,7 @@ from fastapi.responses import JSONResponse  # noqa: E402
 from core.config import CORS_ALLOWED_ORIGINS, ENV, HOST, LOG_LEVEL, PORT, WORKERS  # noqa: E402
 from core.errors import PCError  # noqa: E402
 from core.logging_config import setup_logging  # noqa: E402
-from app.controllers import health_controller, session_controller, suggest_controller  # noqa: E402
+from app.controllers import health_controller, reset_controller, session_controller, suggest_controller  # noqa: E402
 from app.services.artifact_store import artifact_store  # noqa: E402
 
 logger = logging.getLogger("curator")
@@ -56,6 +56,7 @@ async def pc_error_handler(_: Request, exc: PCError) -> JSONResponse:
 app.include_router(session_controller.router)
 app.include_router(suggest_controller.router)
 app.include_router(health_controller.router)
+app.include_router(reset_controller.router)
 
 
 if __name__ == "__main__":
