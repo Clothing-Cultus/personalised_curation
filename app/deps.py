@@ -13,6 +13,7 @@ from app.repositories.taste_repo import TasteRepo
 from app.repositories.product_repo import ProductRepo
 from app.repositories.user_repo import UserRepo
 from app.services.artifact_store import artifact_store
+from app.services.reset_service import ResetService
 from app.services.session_service import SessionService
 
 # Repositories (single process-wide instances).
@@ -36,4 +37,10 @@ session_service = SessionService(
     user_repo=user_repo,
     artifact_store=artifact_store,
     events_repo=events_repo,
+)
+reset_service = ResetService(
+    session_repo=session_repo,
+    items_repo=items_repo,
+    events_repo=events_repo,
+    taste_repo=taste_repo,
 )

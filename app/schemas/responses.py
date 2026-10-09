@@ -46,3 +46,12 @@ class Health(BaseModel):
     n_products: int
     vector_dim: int
     db_writes_enabled: bool
+
+
+class ResetUserResult(BaseModel):
+    user_id: str
+    sessions_deleted: int
+
+
+class ResetAllResult(BaseModel):
+    sessions_deleted: int

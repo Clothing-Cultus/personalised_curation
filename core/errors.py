@@ -23,6 +23,11 @@ class Unauthorized(PCError):
     detail = "Invalid or missing X-Internal-Key"
 
 
+class Forbidden(PCError):
+    status_code = 403
+    detail = "Forbidden"
+
+
 class NotFound(PCError):
     status_code = 404
     detail = "Not found"

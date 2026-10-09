@@ -90,3 +90,33 @@ class SessionRepo:
                 lambda: supabase().table("pc_sessions").update(patch).eq("id", session_id).execute()
             )
         return s
+
+    def ids_for_user(self, user_id: str) -> list[str]:
+        ids = {sid for sid, s in self._by_id.items() if s.get("user_id") == user_id}
+        if gateway.db_enabled:
+            rows = (supabase().table("pc_sessions").select("id")
+                    .eq("user_id", user_id).execute().data or [])
+            ids.update(r["id"] for r in rows)
+        return list(ids)
+
+    def purge_user(self, user_id: str, session_ids: list[str]) -> None:
+        """Delete every session for a user from the cache and (sync) the DB.
+        Delete the user's items/events first — they reference these rows."""
+        for sid in session_ids:
+            self._by_id.pop(sid, None)
+        gateway.spool("pc_sessions_purge_user", {"user_id": user_id, "n": len(session_ids)})
+        if gateway.db_enabled:
+            supabase().table("pc_sessions").delete().eq("user_id", user_id).execute()
+
+    def purge_all(self) -> int:
+        """Delete every session (cache + sync DB). Returns how many. Delete
+        items/events first — they reference these rows."""
+        ids = set(self._by_id)
+        if gateway.db_enabled:
+            rows = supabase().table("pc_sessions").select("id").execute().data or []
+            ids.update(r["id"] for r in rows)
+        self._by_id.clear()
+        gateway.spool("pc_sessions_purge_all", {"n": len(ids)})
+        if gateway.db_enabled:
+            supabase().table("pc_sessions").delete().not_.is_("id", "null").execute()
+        return len(ids)

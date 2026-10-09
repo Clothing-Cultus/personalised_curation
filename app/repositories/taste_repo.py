@@ -102,3 +102,18 @@ class TasteRepo:
                 lambda: supabase().table("user_taste")
                 .upsert(record, on_conflict="user_id").execute()
             )
+
+    def purge_user(self, user_id: str) -> None:
+        """Wipe the taste row and its in-memory state (cache + sync DB).
+        Next start is a cold start."""
+        self._cache.pop(user_id, None)
+        gateway.spool("user_taste_purge_user", {"user_id": user_id})
+        if gateway.db_enabled:
+            supabase().table("user_taste").delete().eq("user_id", user_id).execute()
+
+    def purge_all(self) -> None:
+        """Wipe every taste row and the whole cache. Everyone cold-starts."""
+        self._cache.clear()
+        gateway.spool("user_taste_purge_all", {})
+        if gateway.db_enabled:
+            supabase().table("user_taste").delete().not_.is_("user_id", "null").execute()
